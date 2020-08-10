@@ -11,7 +11,7 @@ find_program(HEXDUMP_COMMAND NAMES xxd)
 
     OUT_DIR <dir>  # Directory where the header and sources will be created
     HEADER <header>  # Name of the generated header
-    NAMESPACE [namespace]  # Namespace of created symbols (optional)
+    ARGS_NAMESPACE [namespace]  # Namespace of created symbols (optional)
     RESOURCE_NAMES <names [...]>  # Names (symbols) of the resources
     RESOURCES <resources [...]>  # Resource files
   )
@@ -28,34 +28,30 @@ function(add_embedded_resources NAME)
 
   set(FULL_HEADER_PATH "${ARGS_OUT_DIR}/${ARGS_HEADER}")
 
-  add_library("${ARGS_NAME}" OBJECT)
-  target_compile_features("${ARGS_NAME}" PUBLIC cxx_std_20)
-  # fPIC not enabled automatically for object libraries due to defect in CMake
+  add_library("${NAME}" OBJECT)
+  target_compile_features("${NAME}" PUBLIC cxx_std_20)
+  # fPIC not added automatically to object libraries due to defect in CMake
   set_target_properties(
-    "${ARGS_NAME}"
+    "${NAME}"
 
     PROPERTIES
     POSITION_INDEPENDENT_CODE ON
   )
 
   file(
-    "${FULL_HEADER_PATH}"
+    WRITE "${FULL_HEADER_PATH}"
 
-    WRITE
     "#pragma once\n"
     "\n"
     "#include <cstddef>\n"
     "#include <span>\n"
     "\n"
-    "namespace ${ARGS_NAMESPACE}\n"
-    "{\n"
   )
 
   if(DEFINED ARGS_NAMESPACE)
     file(
-      "${FULL_HEADER_PATH}"
+      APPEND "${FULL_HEADER_PATH}"
 
-      APPEND
       "namespace ${ARGS_NAMESPACE}\n"
       "{\n"
       "\n"
@@ -68,17 +64,16 @@ function(add_embedded_resources NAME)
 
     # Add symbol to header
     file(
-      "${FULL_HEADER_PATH}"
+      APPEND "${FULL_HEADER_PATH}"
 
-      APPEND
-      "[[nodiscard]] auto ${RESOURCE_NAME}() noexcept -> std::span<std::byte>;\n"
+      "[[nodiscard]] auto ${RESOURCE_NAME}() noexcept -> std::span<std::byte const>;\n"
+      "\n"
     )
 
     # Write .cpp
     file(
-      "${FULL_RESOURCE_UNIT_PATH}"
+      WRITE "${FULL_RESOURCE_UNIT_PATH}"
 
-      WRITE
       "#include \"${ARGS_HEADER}\"\n"
       "\n"
       "#include <cstdint>\n"
@@ -87,9 +82,8 @@ function(add_embedded_resources NAME)
 
     if(DEFINED ARGS_NAMESPACE)
       file(
-        "${FULL_RESOURCE_UNIT_PATH}"
+        APPEND "${FULL_RESOURCE_UNIT_PATH}"
 
-        APPEND
         "namespace ${ARGS_NAMESPACE}\n"
         "{\n"
         "\n"
@@ -97,9 +91,8 @@ function(add_embedded_resources NAME)
     endif()
 
     file(
-      "${FULL_RESOURCE_UNIT_PATH}"
+      APPEND "${FULL_RESOURCE_UNIT_PATH}"
 
-      APPEND
       "namespace\n"
       "{\n"
       "\n"
@@ -109,42 +102,41 @@ function(add_embedded_resources NAME)
       "\n"
       "}  // namespace\n"
       "\n"
-      "auto ${RESOURCE_NAME}() noexcept -> std::span<std::byte>\n"
+      "auto ${RESOURCE_NAME}() noexcept -> std::span<std::byte const>\n"
       "{\n"
-      "    return std::as_bytes(${RESOURCE_NAME}_data);\n"
+      "    return std::as_bytes(std::span{${RESOURCE_NAME}_data});\n"
       "}\n"
     )
 
     if(DEFINED ARGS_NAMESPACE)
       file(
-        "${FULL_RESOURCE_UNIT_PATH}"
+        APPEND "${FULL_RESOURCE_UNIT_PATH}"
 
-        APPEND
         "\n"
         "}  // namespace ${ARGS_NAMESPACE}\n"
       )
     endif()
 
-    target_sources("${ARGS_NAME}" PRIVATE "${FULL_RESOURCE_UNIT_PATH}")
+    target_sources("${NAME}" PRIVATE "${FULL_RESOURCE_UNIT_PATH}")
 
     add_custom_command(
       OUTPUT "${FULL_RESOURCE_HEX_PATH}"
       COMMAND "${HEXDUMP_COMMAND}" -i < "${RESOURCE}" > "${FULL_RESOURCE_HEX_PATH}"
       MAIN_DEPENDENCY "${RESOURCE}"
     )
-
-    add_dependencies("${ARGS_NAME}" "${FULL_RESOURCE_HEX_PATH}")
+    list(APPEND RESOURCES_HEX_FILES "${FULL_RESOURCE_HEX_PATH}")
   endforeach()
 
   if(DEFINED ARGS_NAMESPACE)
     file(
-      "${FULL_HEADER_PATH}"
+      APPEND "${FULL_HEADER_PATH}"
 
-      APPEND
-      "\n"
       "}  // namespace ${ARGS_NAMESPACE}\n"
     )
   endif()
 
-  target_sources("${ARGS_NAME}" PUBLIC "${FULL_HEADER_PATH}")
+  target_sources("${NAME}" PUBLIC "${FULL_HEADER_PATH}")
+
+  add_custom_target("${NAME}_hexdump" DEPENDS "${RESOURCES_HEX_FILES}")
+  add_dependencies("${NAME}" "${NAME}_hexdump")
 endfunction()
