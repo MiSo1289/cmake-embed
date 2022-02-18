@@ -14,11 +14,15 @@ find_program(HEXDUMP_COMMAND NAMES xxd)
     ARGS_NAMESPACE [namespace]  # Namespace of created symbols (optional)
     RESOURCE_NAMES <names [...]>  # Names (symbols) of the resources
     RESOURCES <resources [...]>  # Resource files
+    SPAN_NAMESPACE [namespace]  # Namespace with the `span` type, default `std`
+    SPAN_HEADER [header]  # Header with the `span` type, default `<span>`
+    BYTE_NAMESPACE [namespace]  # Namespace with the `byte` type, default `std`
+    BYTE_HEADER [header]  # Header with the `byte` type, default `<cstddef>`
   )
 ]==]
 function(add_embedded_resources NAME)
   set(OPTIONS "")
-  set(ONE_VALUE_ARGS OUT_DIR HEADER NAMESPACE)
+  set(ONE_VALUE_ARGS OUT_DIR HEADER NAMESPACE SPAN_NAMESPACE SPAN_HEADER)
   set(MULTI_VALUE_ARGS RESOURCE_NAMES RESOURCES)
   cmake_parse_arguments(ARGS "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
@@ -28,8 +32,30 @@ function(add_embedded_resources NAME)
 
   set(FULL_HEADER_PATH "${ARGS_OUT_DIR}/${ARGS_HEADER}")
 
+  if(NOT DEFINED ARGS_SPAN_NAMESPACE)
+    set(ARGS_SPAN_NAMESPACE "std")
+  endif()
+
+  if(NOT DEFINED ARGS_SPAN_HEADER)
+    set(ARGS_SPAN_HEADER "<span>")
+  endif()
+
+  if(NOT DEFINED ARGS_BYTE_NAMESPACE)
+    set(ARGS_BYTE_NAMESPACE "std")
+  endif()
+
+  if(NOT DEFINED ARGS_BYTE_HEADER)
+    set(ARGS_BYTE_HEADER "<cstddef>")
+  endif()
+
   add_library("${NAME}" OBJECT)
-  target_compile_features("${NAME}" PUBLIC cxx_std_20)
+
+  if(ARGS_SPAN_HEADER STREQUAL "<span>")
+    target_compile_features("${NAME}" PUBLIC cxx_std_20)
+  elseif(ARGS_BYTE_HEADER STREQUAL "<cstddef>")
+    target_compile_features("${NAME}" PUBLIC cxx_std_17)
+  endif()
+
   # fPIC not added automatically to object libraries due to defect in CMake
   set_target_properties(
     "${NAME}"
@@ -43,8 +69,8 @@ function(add_embedded_resources NAME)
 
     "#pragma once\n"
     "\n"
-    "#include <cstddef>\n"
-    "#include <span>\n"
+    "#include ${ARGS_BYTE_HEADER}\n"
+    "#include ${ARGS_SPAN_HEADER}\n"
     "\n"
   )
 
@@ -66,7 +92,7 @@ function(add_embedded_resources NAME)
     file(
       APPEND "${FULL_HEADER_PATH}"
 
-      "[[nodiscard]] auto ${RESOURCE_NAME}() noexcept -> std::span<std::byte const>;\n"
+      "[[nodiscard]] auto ${RESOURCE_NAME}() noexcept -> ${ARGS_SPAN_NAMESPACE}::span<${ARGS_BYTE_NAMESPACE}::byte const>;\n"
       "\n"
     )
 
@@ -102,9 +128,9 @@ function(add_embedded_resources NAME)
       "\n"
       "}  // namespace\n"
       "\n"
-      "auto ${RESOURCE_NAME}() noexcept -> std::span<std::byte const>\n"
+      "auto ${RESOURCE_NAME}() noexcept -> ${ARGS_SPAN_NAMESPACE}::span<${ARGS_BYTE_NAMESPACE}::byte const>\n"
       "{\n"
-      "    return std::as_bytes(std::span{${RESOURCE_NAME}_data});\n"
+      "    return ${ARGS_SPAN_NAMESPACE}::as_bytes(${ARGS_SPAN_NAMESPACE}::span{${RESOURCE_NAME}_data});\n"
       "}\n"
     )
 
