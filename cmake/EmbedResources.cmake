@@ -5,24 +5,30 @@ find_program(HEXDUMP_COMMAND NAMES xxd)
 #[==[
   Adds an object library target containing embedded binary resources and
   generates a header file, where you can access them as `span<byte const>`.
+
+  To use with older C++ standards, you can override both the `span` template
+  and the `byte` type to use with e.g. span-lite, Microsoft.GSL or range-v3
+  (don't forget to link your span library of choice to the generated target).
+
   Usage:
   add_embedded_binary_resources(
     name  # Name of the created target
 
     OUT_DIR <dir>  # Directory where the header and sources will be created
+                   # (relative to the build directory)
     HEADER <header>  # Name of the generated header
     NAMESPACE [namespace]  # Namespace of created symbols (optional)
     RESOURCE_NAMES <names [...]>  # Names (symbols) of the resources
     RESOURCES <resources [...]>  # Resource files
-    SPAN_NAMESPACE [namespace]  # Namespace with the `span` type, default `std`
-    SPAN_HEADER [header]  # Header with the `span` type, default `<span>`
-    BYTE_NAMESPACE [namespace]  # Namespace with the `byte` type, default `std`
+    SPAN_TEMPLATE [template name]  # Name of the `span` template, default `std::span`
+    SPAN_HEADER [header]  # Header with the `span` template, default `<span>`
+    BYTE_TYPE [type name]  # Name of the `byte` type, default `std::byte`
     BYTE_HEADER [header]  # Header with the `byte` type, default `<cstddef>`
   )
 ]==]
 function(add_embedded_binary_resources NAME)
   set(OPTIONS "")
-  set(ONE_VALUE_ARGS OUT_DIR HEADER NAMESPACE SPAN_NAMESPACE SPAN_HEADER BYTE_NAMESPACE BYTE_HEADER)
+  set(ONE_VALUE_ARGS OUT_DIR HEADER NAMESPACE SPAN_TEMPLATE SPAN_HEADER BYTE_TYPE BYTE_HEADER)
   set(MULTI_VALUE_ARGS RESOURCE_NAMES RESOURCES)
   cmake_parse_arguments(ARGS "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
@@ -32,16 +38,16 @@ function(add_embedded_binary_resources NAME)
 
   set(FULL_HEADER_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_OUT_DIR}/${ARGS_HEADER}")
 
-  if(NOT DEFINED ARGS_SPAN_NAMESPACE)
-    set(ARGS_SPAN_NAMESPACE "std")
+  if(NOT DEFINED ARGS_SPAN_TEMPLATE)
+    set(ARGS_SPAN_TEMPLATE "std::span")
   endif()
 
   if(NOT DEFINED ARGS_SPAN_HEADER)
     set(ARGS_SPAN_HEADER "<span>")
   endif()
 
-  if(NOT DEFINED ARGS_BYTE_NAMESPACE)
-    set(ARGS_BYTE_NAMESPACE "std")
+  if(NOT DEFINED ARGS_BYTE_TYPE)
+    set(ARGS_BYTE_TYPE "std::byte")
   endif()
 
   if(NOT DEFINED ARGS_BYTE_HEADER)
@@ -53,7 +59,7 @@ function(add_embedded_binary_resources NAME)
 
   if(ARGS_SPAN_HEADER STREQUAL "<span>")
     target_compile_features("${NAME}" PUBLIC cxx_std_20)
-  else()
+  elseif(ARGS_BYTE_HEADER STREQUAL "<cstddef>")
     target_compile_features("${NAME}" PUBLIC cxx_std_17)
   endif()
 
@@ -86,14 +92,16 @@ function(add_embedded_binary_resources NAME)
   endif()
 
   foreach(RESOURCE_NAME RESOURCE IN ZIP_LISTS ARGS_RESOURCE_NAMES ARGS_RESOURCES)
-    set(FULL_RESOURCE_UNIT_PATH "${ARGS_OUT_DIR}/${RESOURCE_NAME}.cpp")
-    set(FULL_RESOURCE_HEX_PATH "${ARGS_OUT_DIR}/${RESOURCE_NAME}.inc")
+    set(FULL_RESOURCE_UNIT_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_OUT_DIR}/${RESOURCE_NAME}.cpp")
+    set(FULL_RESOURCE_HEX_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_OUT_DIR}/${RESOURCE_NAME}.inc")
+    file(SIZE "${RESOURCE}" RESOURCE_SIZE)
 
     # Add symbol to header
     file(
       APPEND "${FULL_HEADER_PATH}"
 
-      "[[nodiscard]] auto ${RESOURCE_NAME}() noexcept -> ${ARGS_SPAN_NAMESPACE}::span<${ARGS_BYTE_NAMESPACE}::byte const>;\n"
+      "[[nodiscard]] ${ARGS_SPAN_TEMPLATE}<${ARGS_BYTE_TYPE} const>\n"
+      "${RESOURCE_NAME}() noexcept;\n"
       "\n"
     )
 
@@ -123,15 +131,16 @@ function(add_embedded_binary_resources NAME)
       "namespace\n"
       "{\n"
       "\n"
-      "std::uint8_t const ${RESOURCE_NAME}_data[] = {\n"
+      "std::uint8_t const ${RESOURCE_NAME}_data[${RESOURCE_SIZE}] = {\n"
       "#include \"${RESOURCE_NAME}.inc\"\n"
       "};\n"
       "\n"
       "}  // namespace\n"
       "\n"
-      "auto ${RESOURCE_NAME}() noexcept -> ${ARGS_SPAN_NAMESPACE}::span<${ARGS_BYTE_NAMESPACE}::byte const>\n"
+      "${ARGS_SPAN_TEMPLATE}<${ARGS_BYTE_TYPE} const>\n"
+      "${RESOURCE_NAME}() noexcept\n"
       "{\n"
-      "    return ${ARGS_SPAN_NAMESPACE}::as_bytes(${ARGS_SPAN_NAMESPACE}::span{${RESOURCE_NAME}_data});\n"
+      "    return as_bytes(${ARGS_SPAN_TEMPLATE}<std::uint8_t const>{${RESOURCE_NAME}_data, ${RESOURCE_SIZE}});\n"
       "}\n"
     )
 
@@ -171,22 +180,28 @@ endfunction()
 #[==[
   Adds an object library target containing embedded text resources and
   generates a header file, where you can access them as `string_view`.
+
+  To use with older C++ standards, you can override the `string_view` type
+  to use with e.g. string-view-lite (don't forget to link your string view
+  library of choice to the generated target).
+
   Usage:
   add_embedded_text_resources(
     name  # Name of the created target
 
     OUT_DIR <dir>  # Directory where the header and sources will be created
+                   # (relative to the build directory)
     HEADER <header>  # Name of the generated header
     NAMESPACE [namespace]  # Namespace of created symbols (optional)
     RESOURCE_NAMES <names [...]>  # Names (symbols) of the resources
     RESOURCES <resources [...]>  # Resource files
-    STRING_VIEW_NAMESPACE [namespace]  # Namespace with the `string_view` type, default `std`
+    STRING_VIEW_TYPE [type name]  # Name of the `string_view` type, default `std::string_view`
     STRING_VIEW_HEADER [header]  # Header with the `string_view` type, default `<string_view>`
   )
 ]==]
 function(add_embedded_text_resources NAME)
   set(OPTIONS "")
-  set(ONE_VALUE_ARGS OUT_DIR HEADER NAMESPACE STRING_VIEW_NAMESPACE STRING_VIEW_HEADER)
+  set(ONE_VALUE_ARGS OUT_DIR HEADER NAMESPACE STRING_VIEW_TYPE STRING_VIEW_HEADER)
   set(MULTI_VALUE_ARGS RESOURCE_NAMES RESOURCES)
   cmake_parse_arguments(ARGS "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
@@ -196,8 +211,8 @@ function(add_embedded_text_resources NAME)
 
   set(FULL_HEADER_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_OUT_DIR}/${ARGS_HEADER}")
 
-  if(NOT DEFINED ARGS_STRING_VIEW_NAMESPACE)
-    set(ARGS_STRING_VIEW_NAMESPACE "std")
+  if(NOT DEFINED ARGS_STRING_VIEW_TYPE)
+    set(ARGS_STRING_VIEW_TYPE "std::string_view")
   endif()
 
   if(NOT DEFINED ARGS_STRING_VIEW_HEADER)
@@ -207,7 +222,9 @@ function(add_embedded_text_resources NAME)
   add_library("${NAME}" OBJECT)
   target_include_directories("${NAME}" PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
 
-  target_compile_features("${NAME}" PUBLIC cxx_std_17)
+  if(ARGS_STRING_VIEW_HEADER STREQUAL "<string_view>")
+    target_compile_features("${NAME}" PUBLIC cxx_std_17)
+  endif()
 
   # fPIC not added automatically to object libraries due to defect in CMake
   set_target_properties(
@@ -237,14 +254,16 @@ function(add_embedded_text_resources NAME)
   endif()
 
   foreach(RESOURCE_NAME RESOURCE IN ZIP_LISTS ARGS_RESOURCE_NAMES ARGS_RESOURCES)
-    set(FULL_RESOURCE_UNIT_PATH "${ARGS_OUT_DIR}/${RESOURCE_NAME}.cpp")
-    set(FULL_RESOURCE_HEX_PATH "${ARGS_OUT_DIR}/${RESOURCE_NAME}.inc")
+    set(FULL_RESOURCE_UNIT_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_OUT_DIR}/${RESOURCE_NAME}.cpp")
+    set(FULL_RESOURCE_HEX_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_OUT_DIR}/${RESOURCE_NAME}.inc")
+    file(SIZE "${RESOURCE}" RESOURCE_SIZE)
 
     # Add symbol to header
     file(
       APPEND "${FULL_HEADER_PATH}"
 
-      "[[nodiscard]] auto ${RESOURCE_NAME}() noexcept -> ${ARGS_STRING_VIEW_NAMESPACE}::string_view;\n"
+      "[[nodiscard]] ${ARGS_STRING_VIEW_TYPE}\n"
+      "${RESOURCE_NAME}() noexcept;\n"
       "\n"
     )
 
@@ -253,8 +272,6 @@ function(add_embedded_text_resources NAME)
       WRITE "${FULL_RESOURCE_UNIT_PATH}"
 
       "#include \"${ARGS_HEADER}\"\n"
-      "\n"
-      "#include <iterator>\n"
       "\n"
     )
 
@@ -274,15 +291,16 @@ function(add_embedded_text_resources NAME)
       "namespace\n"
       "{\n"
       "\n"
-      "char const ${RESOURCE_NAME}_data[] = {\n"
+      "char const ${RESOURCE_NAME}_data[${RESOURCE_SIZE}] = {\n"
       "#include \"${RESOURCE_NAME}.inc\"\n"
       "};\n"
       "\n"
       "}  // namespace\n"
       "\n"
-      "auto ${RESOURCE_NAME}() noexcept -> ${ARGS_STRING_VIEW_NAMESPACE}::string_view\n"
+      "${ARGS_STRING_VIEW_TYPE}\n"
+      "${RESOURCE_NAME}() noexcept\n"
       "{\n"
-      "    return ${ARGS_STRING_VIEW_NAMESPACE}::string_view{${RESOURCE_NAME}_data, std::size(${RESOURCE_NAME}_data)};\n"
+      "    return ${ARGS_STRING_VIEW_TYPE}{${RESOURCE_NAME}_data, ${RESOURCE_SIZE}};\n"
       "}\n"
     )
 

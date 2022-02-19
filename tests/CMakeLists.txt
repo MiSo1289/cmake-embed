@@ -3,7 +3,7 @@ include(EmbedResources)
 
 add_embedded_binary_resources(
   test_resources_binary
-  OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/test_resources"
+  OUT_DIR test_resources
   HEADER binary.hpp
   NAMESPACE test_resources
   RESOURCE_NAMES binary_data
@@ -12,7 +12,7 @@ add_embedded_binary_resources(
 
 add_embedded_text_resources(
   test_resources_text
-  OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/test_resources"
+  OUT_DIR test_resources
   HEADER text.hpp
   NAMESPACE test_resources
   RESOURCE_NAMES text_data
