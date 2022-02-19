@@ -3,7 +3,7 @@ from conans import ConanFile
 
 class CMakeEmbed(ConanFile):
     name = "cmake_embed"
-    version = "0.2.0"
+    version = "0.3.0"
     revision_mode = "scm"
     exports_sources = "cmake/*"
 
