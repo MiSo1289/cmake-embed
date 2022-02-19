@@ -6,6 +6,8 @@ Resources are embedded in an object library target, and can be accessed via func
 
 For the script to work, the `xxd` program must be available to CMake.
 
+Requires CMake >= 3.17.
+
 ## Example usage:
 
 `CMakeLists.txt`
