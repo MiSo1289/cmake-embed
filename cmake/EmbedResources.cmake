@@ -94,7 +94,6 @@ function(add_embedded_binary_resources NAME)
   foreach(RESOURCE_NAME RESOURCE IN ZIP_LISTS ARGS_RESOURCE_NAMES ARGS_RESOURCES)
     set(FULL_RESOURCE_UNIT_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_OUT_DIR}/${RESOURCE_NAME}.cpp")
     set(FULL_RESOURCE_HEX_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_OUT_DIR}/${RESOURCE_NAME}.inc")
-    file(SIZE "${RESOURCE}" RESOURCE_SIZE)
 
     # Add symbol to header
     file(
@@ -131,7 +130,7 @@ function(add_embedded_binary_resources NAME)
       "namespace\n"
       "{\n"
       "\n"
-      "std::uint8_t const ${RESOURCE_NAME}_data[${RESOURCE_SIZE}] = {\n"
+      "std::uint8_t const ${RESOURCE_NAME}_data[] = {\n"
       "#include \"${RESOURCE_NAME}.inc\"\n"
       "};\n"
       "\n"
@@ -140,7 +139,7 @@ function(add_embedded_binary_resources NAME)
       "${ARGS_SPAN_TEMPLATE}<${ARGS_BYTE_TYPE} const>\n"
       "${RESOURCE_NAME}() noexcept\n"
       "{\n"
-      "    return as_bytes(${ARGS_SPAN_TEMPLATE}<std::uint8_t const>{${RESOURCE_NAME}_data, ${RESOURCE_SIZE}});\n"
+      "    return as_bytes(${ARGS_SPAN_TEMPLATE}<std::uint8_t const>{${RESOURCE_NAME}_data, sizeof(${RESOURCE_NAME}_data)});\n"
       "}\n"
     )
 
@@ -256,7 +255,6 @@ function(add_embedded_text_resources NAME)
   foreach(RESOURCE_NAME RESOURCE IN ZIP_LISTS ARGS_RESOURCE_NAMES ARGS_RESOURCES)
     set(FULL_RESOURCE_UNIT_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_OUT_DIR}/${RESOURCE_NAME}.cpp")
     set(FULL_RESOURCE_HEX_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_OUT_DIR}/${RESOURCE_NAME}.inc")
-    file(SIZE "${RESOURCE}" RESOURCE_SIZE)
 
     # Add symbol to header
     file(
@@ -291,7 +289,7 @@ function(add_embedded_text_resources NAME)
       "namespace\n"
       "{\n"
       "\n"
-      "char const ${RESOURCE_NAME}_data[${RESOURCE_SIZE}] = {\n"
+      "char const ${RESOURCE_NAME}_data[] = {\n"
       "#include \"${RESOURCE_NAME}.inc\"\n"
       "};\n"
       "\n"
@@ -300,7 +298,7 @@ function(add_embedded_text_resources NAME)
       "${ARGS_STRING_VIEW_TYPE}\n"
       "${RESOURCE_NAME}() noexcept\n"
       "{\n"
-      "    return ${ARGS_STRING_VIEW_TYPE}{${RESOURCE_NAME}_data, ${RESOURCE_SIZE}};\n"
+      "    return ${ARGS_STRING_VIEW_TYPE}{${RESOURCE_NAME}_data, sizeof(${RESOURCE_NAME}_data)};\n"
       "}\n"
     )
 
